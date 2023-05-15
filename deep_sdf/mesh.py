@@ -32,6 +32,9 @@ def create_mesh(
     samples[:, 1] = (overall_index.long() / N) % N
     samples[:, 0] = ((overall_index.long() / N) / N) % N
 
+    top_region_mask = samples[:, 0] >= (N // 2)  # Modify the condition as per your requirement
+    samples = samples[top_region_mask]
+
     # transform first 3 columns
     # to be the x, y, z coordinate
     samples[:, 0] = (samples[:, 0] * voxel_size) + voxel_origin[2]
