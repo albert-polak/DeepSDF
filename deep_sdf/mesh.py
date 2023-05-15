@@ -59,8 +59,8 @@ def create_mesh(
         head += max_batch
 
     sdf_values = samples[:, 3]
-    sdf_values = sdf_values.reshape((N // 2), (N // 2), (N // 2))
-    # sdf_values = sdf_values.reshape(samples.shape[0])
+    # sdf_values = sdf_values.reshape(N, N, N)
+    sdf_values = sdf_values.reshape(samples.shape[0], samples.shape[0], samples.shape[0])
 
     end = time.time()
     print("sampling takes: %f" % (end - start))
