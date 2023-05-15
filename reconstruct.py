@@ -250,17 +250,21 @@ if __name__ == "__main__":
             data_sdf[1] = data_sdf[1][torch.randperm(data_sdf[1].shape[0])]
 
             start = time.time()
-            err, latent = reconstruct(
-                decoder,
-                int(args.iterations),
-                latent_size,
-                data_sdf,
-                0.01,  # [emp_mean,emp_var],
-                0.1,
-                num_samples=8000,
-                lr=5e-3,
-                l2reg=True,
-            )
+            try:
+                err, latent = reconstruct(
+                    decoder,
+                    int(args.iterations),
+                    latent_size,
+                    data_sdf,
+                    0.01,  # [emp_mean,emp_var],
+                    0.1,
+                    num_samples=800,
+                    lr=5e-3,
+                    l2reg=True,
+                )
+            except:
+                print('to few samples')
+                continue
             logging.debug("reconstruct time: {}".format(time.time() - start))
             err_sum += err
             logging.debug("current_error avg: {}".format((err_sum / (ii + 1))))
