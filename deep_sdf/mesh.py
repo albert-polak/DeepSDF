@@ -93,7 +93,7 @@ def create_mesh(
     samples[:, 0] = ((overall_index.long() / N) / N) % N
 
     # Filter out samples that are not in the top region
-    top_region_mask = samples[:, 1] >= (N / 2) & (samples[:, 1] < N)
+    top_region_mask = samples[:, 1] >= (N / 2) 
     samples = samples[top_region_mask]
 
     # transform first 3 columns
@@ -129,7 +129,7 @@ def create_mesh(
 
     end = time.time()
     print("sampling takes: %f" % (end - start))
-
+    voxel_origin = [-1, -1, N/2]
     convert_sdf_samples_to_ply(
         sdf_values.data.cpu(),
         voxel_origin,
