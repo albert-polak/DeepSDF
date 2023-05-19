@@ -93,7 +93,7 @@ def create_mesh(
     samples[:, 0] = ((overall_index.long() / N) / N) % N
 
     # Filter out samples that are not in the top region
-    top_region_mask = samples[:, 0] >= (N / 2)
+    top_region_mask = samples[:, 2] >= (N / 2)
     samples = samples[top_region_mask]
 
     # transform first 3 columns
