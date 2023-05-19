@@ -108,7 +108,7 @@ def create_mesh(
 
     head = 0
 
-    sdf_values = torch.zeros(N ** 3)
+    sdf_values = torch.zeros(num_samples ** 3)
 
     while head < num_samples:
         sample_subset = samples[head : min(head + max_batch, num_samples), 0:3].cuda()
@@ -124,12 +124,12 @@ def create_mesh(
         head += max_batch
 
     num_voxels = N * N * N
-    sdf_values = sdf_values[:num_voxels]
-    sdf_values = sdf_values.reshape(N, N, N)
+    # sdf_values = sdf_values[:num_voxels]
+    sdf_values = sdf_values.reshape(num_samples, num_samples, num_samples)
 
     end = time.time()
     print("sampling takes: %f" % (end - start))
-    voxel_origin = [-1, -1, N/2]
+    
     convert_sdf_samples_to_ply(
         sdf_values.data.cpu(),
         voxel_origin,
