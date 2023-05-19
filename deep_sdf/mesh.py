@@ -33,17 +33,13 @@ def create_mesh_org(
     samples[:, 0] = ((overall_index.long() / N) / N) % N
 
 
-    print(len(samples[:, 2]))
-    print(len(samples[:, 1]))
-    print(len(samples[:, 0]))
-
     # transform first 3 columns
     # to be the x, y, z coordinate
     samples[:, 0] = (samples[:, 0] * voxel_size) + voxel_origin[2]
     samples[:, 1] = (samples[:, 1] * voxel_size) + voxel_origin[1]
     samples[:, 2] = (samples[:, 2] * voxel_size) + voxel_origin[0]
 
-    num_samples = samples.shape[0]
+    num_samples = N ** 3
 
     samples.requires_grad = False
 
@@ -61,8 +57,6 @@ def create_mesh_org(
         head += max_batch
 
     sdf_values = samples[:, 3]
-    num_voxels = N * N * N
-    sdf_values = sdf_values[:num_voxels]
     sdf_values = sdf_values.reshape(N, N, N)
 
     end = time.time()
@@ -126,6 +120,8 @@ def create_mesh(
         head += max_batch
 
     sdf_values = samples[:, 3]
+    num_voxels = N * N * N
+    sdf_values = sdf_values[:num_voxels]
     sdf_values = sdf_values.reshape(N, N, N)
 
     end = time.time()
