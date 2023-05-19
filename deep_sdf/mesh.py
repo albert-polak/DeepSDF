@@ -43,7 +43,7 @@ def create_mesh_org(
     samples[:, 1] = (samples[:, 1] * voxel_size) + voxel_origin[1]
     samples[:, 2] = (samples[:, 2] * voxel_size) + voxel_origin[0]
 
-    num_samples = N ** 3
+    num_samples = samples.shape[0]
 
     samples.requires_grad = False
 
@@ -61,6 +61,8 @@ def create_mesh_org(
         head += max_batch
 
     sdf_values = samples[:, 3]
+    num_voxels = N * N * N
+    sdf_values = sdf_values[:num_voxels]
     sdf_values = sdf_values.reshape(N, N, N)
 
     end = time.time()
