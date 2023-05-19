@@ -108,10 +108,14 @@ def create_mesh(
 
     head = 0
 
+    sdf_values = torch.zeros(N ** 3)
+
     while head < num_samples:
         sample_subset = samples[head : min(head + max_batch, num_samples), 0:3].cuda()
 
-        samples[head : min(head + max_batch, num_samples), 3] = (
+        current_batch_size = min(head + max_batch, num_samples) - head
+
+        sdf_values[head : min(head + max_batch, num_samples)] = (
             deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
             .squeeze(1)
             .detach()
@@ -119,7 +123,6 @@ def create_mesh(
         )
         head += max_batch
 
-    sdf_values = samples[:, 3]
     num_voxels = N * N * N
     sdf_values = sdf_values[:num_voxels]
     sdf_values = sdf_values.reshape(N, N, N)
