@@ -92,9 +92,8 @@ def create_mesh(
     samples[:, 1] = (overall_index.long() / N) % N
     samples[:, 0] = ((overall_index.long() / N) / N) % N
 
-    # Filter out samples that are not in the top region
-    top_region_mask = samples[:, 1] >= (N / 2) 
-    samples = samples[top_region_mask]
+    # Sort samples in descending order of y-coordinate
+    samples = samples[samples[:, 1].argsort(descending=True)]
 
     # transform first 3 columns
     # to be the x, y, z coordinate
@@ -107,25 +106,30 @@ def create_mesh(
     samples.requires_grad = False
 
     head = 0
+    has_positive_sdf = False
 
-    sdf_values = torch.zeros(num_samples ** 3)
+    sdf_values = torch.zeros(N ** 3)
 
     while head < num_samples:
         sample_subset = samples[head : min(head + max_batch, num_samples), 0:3].cuda()
 
-        current_batch_size = min(head + max_batch, num_samples) - head
+        sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
+        sdf_values = sdf_values.squeeze(1).detach().cpu()
 
-        sdf_values[head : min(head + max_batch, num_samples)] = (
-            deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
-            .squeeze(1)
-            .detach()
-            .cpu()
-        )
+        positive_mask = sdf_values > 0
+        if positive_mask.any():
+            has_positive_sdf = True
+            sdf_values[positive_mask] = 0.0
+
+        samples[head : min(head + max_batch, num_samples), 3] = sdf_values
+
+        if has_positive_sdf:
+            break
+
         head += max_batch
 
-    num_voxels = N * N * N
-    # sdf_values = sdf_values[:num_voxels]
-    sdf_values = sdf_values.reshape(num_samples, num_samples, num_samples)
+    sdf_values = samples[:, 3]
+    sdf_values = sdf_values.reshape(N, N, N)
 
     end = time.time()
     print("sampling takes: %f" % (end - start))
