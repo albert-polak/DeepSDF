@@ -175,8 +175,8 @@ def convert_sdf_samples_to_ply(
     dot_product = np.sum(normals * [0, 0, 1], axis=1)
     upward_normals = normals[dot_product > 0.0]
 
-    # calculate dot product only for visible faces
-    visible_faces = faces[dot_product > 0.0]
+    # filter faces based on visible normals
+    visible_faces = faces[np.any(dot_product[faces] > 0.0, axis=1)]
 
     # transform from voxel coordinates to camera coordinates
     # note x and y are flipped in the output of marching_cubes
