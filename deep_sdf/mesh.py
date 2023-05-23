@@ -72,7 +72,7 @@ def create_mesh_org(
     )
 
 def create_mesh(
-    decoder, latent_vec, filename, N=256, max_batch=32 ** 3, offset=None, scale=None
+    decoder, latent_vec, filename, N=256, max_batch=32 ** 3, offset=None, scale=[1, 1, 1]
 ):
     start = time.time()
     ply_filename = filename
@@ -81,7 +81,7 @@ def create_mesh(
 
     # NOTE: the voxel_origin is actually the (bottom, left, down) corner, not the middle
     voxel_origin = [-1, -1, -1]
-    voxel_size = 2.0 / (N - 1)
+    voxel_size = [2.0 / (N - 1), 2.0 / (N - 1), 2.0 / (N - 1)]
 
     overall_index = torch.arange(0, N ** 3, 1, out=torch.LongTensor())
     samples = torch.zeros(N ** 3, 4)
@@ -98,9 +98,9 @@ def create_mesh(
 
     # transform first 3 columns
     # to be the x, y, z coordinate
-    samples[:, 0] = (samples[:, 0] * voxel_size) + voxel_origin[2]
-    samples[:, 1] = (samples[:, 1] * voxel_size) + voxel_origin[1]
-    samples[:, 2] = (samples[:, 2] * voxel_size) + voxel_origin[0]
+    samples[:, 0] = (samples[:, 0] * voxel_size[0]) + voxel_origin[2]
+    samples[:, 1] = (samples[:, 1] * voxel_size[1]) + voxel_origin[1]
+    samples[:, 2] = (samples[:, 2] * voxel_size[2]) + voxel_origin[0]
 
     num_samples = samples.shape[0]
 
@@ -128,10 +128,13 @@ def create_mesh(
     sdf_values = sdf_values.reshape(N, N, N)
 
     # Filter out the bottom portion of the object
-    sdf_values = sdf_values[N // 2:, :, :]
+    sdf_values = sdf_values[:, (N // 2):, :]
 
     # Adjust voxel_origin to match the visible portion of the object
-    voxel_origin[1] = voxel_origin[1] + (N // 2) * voxel_size
+    voxel_origin[1] = voxel_origin[1] + (N // 2) * voxel_size[1]
+
+    # Adjust voxel_size for correct aspect ratio
+    voxel_size[0] *= 2
 
     end = time.time()
     print("sampling takes: %f" % (end - start))
@@ -152,7 +155,6 @@ def convert_sdf_samples_to_ply(
     ply_filename_out,
     offset=None,
     scale=None,
-    crop_margin=0.1
 ):
     """
     Convert sdf samples to .ply
@@ -161,10 +163,6 @@ def convert_sdf_samples_to_ply(
     :voxel_grid_origin: a list of three floats: the bottom, left, down origin of the voxel grid
     :voxel_size: float, the size of the voxels
     :ply_filename_out: string, path of the filename to save to
-    :offset: optional offset to apply to the mesh (default: None)
-    :scale: optional scale factor to apply to the mesh (default: None)
-    :crop_margin: margin to crop the mesh (default: 0.1)
-    :view_direction: optional view direction for surface visibility (default: None)
 
     This function adapted from: https://github.com/RobotLocomotion/spartan
     """
@@ -172,16 +170,11 @@ def convert_sdf_samples_to_ply(
 
     numpy_3d_sdf_tensor = pytorch_3d_sdf_tensor.numpy()
 
+    voxel_size_np = np.array(voxel_size)
+
     verts, faces, normals, values = skimage.measure.marching_cubes(
-        numpy_3d_sdf_tensor, level=0.0, spacing=[voxel_size] * 3
+        numpy_3d_sdf_tensor, level=0.0, spacing=voxel_size_np
     )
-
-    # # calculate dot product between normals and view direction
-    # dot_product = np.sum(normals * [0, -1, 0], axis=1)
-    # upward_normals = normals[dot_product > 0.0]
-
-    # # filter faces based on visible normals
-    # visible_faces = faces[np.any(dot_product[faces] > 0.0, axis=1)]
 
     # transform from voxel coordinates to camera coordinates
     # note x and y are flipped in the output of marching_cubes
@@ -197,17 +190,18 @@ def convert_sdf_samples_to_ply(
         mesh_points = mesh_points - offset
 
     # try writing to the ply file
-    num_verts = mesh_points.shape[0]
-    num_faces = visible_faces.shape[0]
+
+    num_verts = verts.shape[0]
+    num_faces = faces.shape[0]
 
     verts_tuple = np.zeros((num_verts,), dtype=[("x", "f4"), ("y", "f4"), ("z", "f4")])
 
-    for i in range(num_verts):
+    for i in range(0, num_verts):
         verts_tuple[i] = tuple(mesh_points[i, :])
 
     faces_building = []
-    for i in range(num_faces):
-        faces_building.append(((visible_faces[i, :].tolist(),)))
+    for i in range(0, num_faces):
+        faces_building.append(((faces[i, :].tolist(),)))
     faces_tuple = np.array(faces_building, dtype=[("vertex_indices", "i4", (3,))])
 
     el_verts = plyfile.PlyElement.describe(verts_tuple, "vertex")
