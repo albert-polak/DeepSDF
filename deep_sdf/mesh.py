@@ -147,6 +147,7 @@ def convert_sdf_samples_to_ply(
     ply_filename_out,
     offset=None,
     scale=None,
+    crop_margin=0.1
 ):
     """
     Convert sdf samples to .ply
@@ -155,6 +156,9 @@ def convert_sdf_samples_to_ply(
     :voxel_grid_origin: a list of three floats: the bottom, left, down origin of the voxel grid
     :voxel_size: float, the size of the voxels
     :ply_filename_out: string, path of the filename to save to
+    :offset: optional offset to apply to the mesh (default: None)
+    :scale: optional scale factor to apply to the mesh (default: None)
+    :crop_margin: margin to crop the mesh (default: 0.1)
 
     This function adapted from: https://github.com/RobotLocomotion/spartan
     """
@@ -179,19 +183,33 @@ def convert_sdf_samples_to_ply(
     if offset is not None:
         mesh_points = mesh_points - offset
 
-    # Filter out surfaces not visible from above
-    mask = mesh_points[:, 1] == np.max(mesh_points[:, 1])
-    mesh_points = mesh_points[mask]
-    face_indices = np.where(mask)[0]
-    face_indices_map = {index: i for i, index in enumerate(face_indices)}
+    # Crop the mesh by removing outermost vertices
+    min_coord = np.min(mesh_points, axis=0)
+    max_coord = np.max(mesh_points, axis=0)
+    margin = crop_margin * (max_coord - min_coord)
+    min_coord += margin
+    max_coord -= margin
+    valid_indices = np.logical_and(
+        np.logical_and(mesh_points[:, 0] >= min_coord[0], mesh_points[:, 0] <= max_coord[0]),
+        np.logical_and(mesh_points[:, 1] >= min_coord[1], mesh_points[:, 1] <= max_coord[1]),
+        np.logical_and(mesh_points[:, 2] >= min_coord[2], mesh_points[:, 2] <= max_coord[2])
+    )
+    mesh_points = mesh_points[valid_indices]
+    faces = faces[np.isin(faces, np.where(valid_indices)[0]).all(axis=1)]
 
-    # Update the face indices to handle missing values
-    default_index = -1
-    faces = np.array([[face_indices_map.get(index, default_index) for index in face] for face in faces])
+    # # Filter out surfaces not visible from above
+    # mask = mesh_points[:, 1] == np.max(mesh_points[:, 1])
+    # mesh_points = mesh_points[mask]
+    # face_indices = np.where(mask)[0]
+    # face_indices_map = {index: i for i, index in enumerate(face_indices)}
 
-    # Remove faces with missing indices
-    valid_face_indices = np.all(faces != default_index, axis=1)
-    faces = faces[valid_face_indices]
+    # # Update the face indices to handle missing values
+    # default_index = -1
+    # faces = np.array([[face_indices_map.get(index, default_index) for index in face] for face in faces])
+
+    # # Remove faces with missing indices
+    # valid_face_indices = np.all(faces != default_index, axis=1)
+    # faces = faces[valid_face_indices]
 
     # try writing to the ply file
     num_verts = mesh_points.shape[0]
@@ -202,7 +220,10 @@ def convert_sdf_samples_to_ply(
     for i in range(num_verts):
         verts_tuple[i] = tuple(mesh_points[i, :])
 
-    faces_tuple = np.array([(face,) for face in faces], dtype=[("vertex_indices", "i4", (3,))])
+    faces_building = []
+    for i in range(num_faces):
+        faces_building.append(((faces[i, :].tolist(),)))
+    faces_tuple = np.array(faces_building, dtype=[("vertex_indices", "i4", (3,))])
 
     el_verts = plyfile.PlyElement.describe(verts_tuple, "vertex")
     el_faces = plyfile.PlyElement.describe(faces_tuple, "face")
