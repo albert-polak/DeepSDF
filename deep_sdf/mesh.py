@@ -199,12 +199,12 @@ def convert_sdf_samples_to_ply(
 
     # Filter out surfaces not visible from above
     xz = mesh_points[:, [0, 2]]
-    unique_indices, unique_inverse = np.unique(xz, axis=0, return_inverse=True)
+    unique_indices, unique_inverse, unique_counts = np.unique(xz, axis=0, return_inverse=True, return_counts=True)
     visible_indices = np.zeros_like(mesh_points, dtype=bool)
-    visible_indices[valid_indices] = np.logical_and.reduceat(
+    visible_indices[valid_indices] = np.repeat(
         np.argmax(mesh_points[:, 1], axis=0) == unique_inverse,
-        np.cumsum(np.bincount(unique_inverse))
-    )[unique_inverse[valid_indices]]
+        unique_counts[unique_inverse]
+    )[valid_indices]
 
     mesh_points = mesh_points[visible_indices]
     faces = visible_indices[faces]
