@@ -183,33 +183,32 @@ def convert_sdf_samples_to_ply(
     if offset is not None:
         mesh_points = mesh_points - offset
 
-    # Crop the mesh by removing outermost vertices
-    min_coord = np.min(mesh_points, axis=0)
-    max_coord = np.max(mesh_points, axis=0)
-    margin = crop_margin * (max_coord - min_coord)
-    min_coord += margin
-    max_coord -= margin
-    valid_indices = np.logical_and(
-        np.logical_and(mesh_points[:, 0] >= min_coord[0], mesh_points[:, 0] <= max_coord[0]),
-        np.logical_and(mesh_points[:, 1] >= min_coord[1], mesh_points[:, 1] <= max_coord[1]),
-        np.logical_and(mesh_points[:, 2] >= min_coord[2], mesh_points[:, 2] <= max_coord[2])
-    )
-    mesh_points = mesh_points[valid_indices]
-    faces = faces[np.isin(faces, np.where(valid_indices)[0]).all(axis=1)]
+    # # Crop the mesh by removing outermost vertices
+    # min_coord = np.min(mesh_points, axis=0)
+    # max_coord = np.max(mesh_points, axis=0)
+    # margin = crop_margin * (max_coord - min_coord)
+    # min_coord += margin
+    # max_coord -= margin
+    # valid_indices = np.logical_and(
+    #     np.logical_and(mesh_points[:, 0] >= min_coord[0], mesh_points[:, 0] <= max_coord[0]),
+    #     np.logical_and(mesh_points[:, 1] >= min_coord[1], mesh_points[:, 1] <= max_coord[1]),
+    #     np.logical_and(mesh_points[:, 2] >= min_coord[2], mesh_points[:, 2] <= max_coord[2])
+    # )
+    # mesh_points = mesh_points[valid_indices]
+    # faces = faces[np.isin(faces, np.where(valid_indices)[0]).all(axis=1)]
 
     # Filter out surfaces not visible from above
-    mask = mesh_points[:, 1] == np.max(mesh_points[:, 1])
-    mesh_points = mesh_points[mask]
-    face_indices = np.where(mask)[0]
-    face_indices_map = {index: i for i, index in enumerate(face_indices)}
-
-    # Update the face indices to handle missing values
-    default_index = -1
-    faces = np.array([[face_indices_map.get(index, default_index) for index in face] for face in faces])
-
-    # Remove faces with missing indices
-    valid_face_indices = np.all(faces != default_index, axis=1)
-    faces = faces[valid_face_indices]
+    unique_xz = np.unique(mesh_points[:, [0, 2]], axis=0)
+    visible_points_indices = []
+    for xz in unique_xz:
+        mask = np.logical_and(mesh_points[:, 0] == xz[0], mesh_points[:, 2] == xz[1])
+        max_y_index = np.argmax(mesh_points[mask][:, 1])
+        visible_points_indices.append(np.where(mask)[0][max_y_index])
+    visible_points_indices = np.array(visible_points_indices)
+    mesh_points = mesh_points[visible_points_indices]
+    # Fix face indices based on the new vertex indices
+    face_indices_map = {old_index: new_index for new_index, old_index in enumerate(visible_points_indices)}
+    faces = np.array([[face_indices_map[index] for index in face] for face in faces])
 
     # try writing to the ply file
     num_verts = mesh_points.shape[0]
