@@ -198,17 +198,19 @@ def convert_sdf_samples_to_ply(
     # faces = faces[np.isin(faces, np.where(valid_indices)[0]).all(axis=1)]
 
     # Filter out surfaces not visible from above
-    unique_xz = np.unique(mesh_points[:, [0, 2]], axis=0)
-    visible_points_indices = []
-    for xz in unique_xz:
-        mask = np.logical_and(mesh_points[:, 0] == xz[0], mesh_points[:, 2] == xz[1])
-        max_y_index = np.argmax(mesh_points[mask][:, 1])
-        visible_points_indices.append(np.where(mask)[0][max_y_index])
-    visible_points_indices = np.array(visible_points_indices)
-    mesh_points = mesh_points[visible_points_indices]
-    # Fix face indices based on the new vertex indices
-    face_indices_map = {old_index: new_index for new_index, old_index in enumerate(visible_points_indices)}
-    faces = np.array([[face_indices_map[index] for index in face] for face in faces])
+    xz = mesh_points[:, [0, 2]]
+    _, unique_indices = np.unique(xz, axis=0, return_index=True)
+    visible_points_indices = np.zeros_like(mesh_points, dtype=bool)
+    visible_points_indices[unique_indices] = True
+
+    # Remove duplicate points that share the same xz but have different y
+    unique_mesh_points = mesh_points[unique_indices]
+    unique_faces = np.zeros_like(faces)
+    for i, face in enumerate(faces):
+        unique_faces[i] = np.where(unique_indices == face)[0]
+
+    mesh_points = unique_mesh_points
+    faces = unique_faces
 
     # try writing to the ply file
     num_verts = mesh_points.shape[0]
