@@ -183,19 +183,19 @@ def convert_sdf_samples_to_ply(
     if offset is not None:
         mesh_points = mesh_points - offset
 
-    # # Crop the mesh by removing outermost vertices
-    # min_coord = np.min(mesh_points, axis=0)
-    # max_coord = np.max(mesh_points, axis=0)
-    # margin = crop_margin * (max_coord - min_coord)
-    # min_coord += margin
-    # max_coord -= margin
-    # valid_indices = np.logical_and(
-    #     np.logical_and(mesh_points[:, 0] >= min_coord[0], mesh_points[:, 0] <= max_coord[0]),
-    #     np.logical_and(mesh_points[:, 1] >= min_coord[1], mesh_points[:, 1] <= max_coord[1]),
-    #     np.logical_and(mesh_points[:, 2] >= min_coord[2], mesh_points[:, 2] <= max_coord[2])
-    # )
-    # mesh_points = mesh_points[valid_indices]
-    # faces = faces[np.isin(faces, np.where(valid_indices)[0]).all(axis=1)]
+    # Crop the mesh by removing outermost vertices
+    min_coord = np.min(mesh_points, axis=0)
+    max_coord = np.max(mesh_points, axis=0)
+    margin = crop_margin * (max_coord - min_coord)
+    min_coord += margin
+    max_coord -= margin
+    valid_indices = np.logical_and(
+        np.logical_and(mesh_points[:, 0] >= min_coord[0], mesh_points[:, 0] <= max_coord[0]),
+        np.logical_and(mesh_points[:, 1] >= min_coord[1], mesh_points[:, 1] <= max_coord[1]),
+        np.logical_and(mesh_points[:, 2] >= min_coord[2], mesh_points[:, 2] <= max_coord[2])
+    )
+    mesh_points = mesh_points[valid_indices]
+    faces = faces[np.isin(faces, np.where(valid_indices)[0]).all(axis=1)]
 
     # Filter out surfaces not visible from above
     xz = mesh_points[:, [0, 2]]
