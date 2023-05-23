@@ -182,7 +182,9 @@ def convert_sdf_samples_to_ply(
     # Filter out surfaces not visible from above
     mask = mesh_points[:, 1] == np.max(mesh_points[:, 1])
     mesh_points = mesh_points[mask]
-    faces = faces[np.isin(faces, np.where(mask)[0]).any(axis=1)]
+    face_indices = np.where(mask)[0]
+    face_indices_map = {index: i for i, index in enumerate(face_indices)}
+    faces = np.array([[face_indices_map[index] for index in face] for face in faces])
 
     # try writing to the ply file
     num_verts = mesh_points.shape[0]
@@ -193,10 +195,7 @@ def convert_sdf_samples_to_ply(
     for i in range(num_verts):
         verts_tuple[i] = tuple(mesh_points[i, :])
 
-    faces_building = []
-    for i in range(num_faces):
-        faces_building.append(((faces[i, :].tolist(),)))
-    faces_tuple = np.array(faces_building, dtype=[("vertex_indices", "i4", (3,))])
+    faces_tuple = np.array([(face,) for face in faces], dtype=[("vertex_indices", "i4", (3,))])
 
     el_verts = plyfile.PlyElement.describe(verts_tuple, "vertex")
     el_faces = plyfile.PlyElement.describe(faces_tuple, "face")
