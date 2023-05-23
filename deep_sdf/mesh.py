@@ -159,6 +159,7 @@ def convert_sdf_samples_to_ply(
     :offset: optional offset to apply to the mesh (default: None)
     :scale: optional scale factor to apply to the mesh (default: None)
     :crop_margin: margin to crop the mesh (default: 0.1)
+    :view_direction: optional view direction for surface visibility (default: None)
 
     This function adapted from: https://github.com/RobotLocomotion/spartan
     """
@@ -169,6 +170,13 @@ def convert_sdf_samples_to_ply(
     verts, faces, normals, values = skimage.measure.marching_cubes(
         numpy_3d_sdf_tensor, level=0.0, spacing=[voxel_size] * 3
     )
+
+    # calculate dot product between normals and view direction
+    dot_product = np.sum(normals * [0, 0, 1], axis=1)
+    upward_normals = normals[dot_product > 0.0]
+
+    # calculate dot product only for visible faces
+    visible_faces = faces[dot_product > 0.0]
 
     # transform from voxel coordinates to camera coordinates
     # note x and y are flipped in the output of marching_cubes
@@ -183,35 +191,9 @@ def convert_sdf_samples_to_ply(
     if offset is not None:
         mesh_points = mesh_points - offset
 
-    # Crop the mesh by removing outermost vertices
-    min_coord = np.min(mesh_points, axis=0)
-    max_coord = np.max(mesh_points, axis=0)
-    margin = crop_margin * (max_coord - min_coord)
-    min_coord += margin
-    max_coord -= margin
-    valid_indices = np.logical_and(
-        np.logical_and(mesh_points[:, 0] >= min_coord[0], mesh_points[:, 0] <= max_coord[0]),
-        np.logical_and(mesh_points[:, 1] >= min_coord[1], mesh_points[:, 1] <= max_coord[1]),
-        np.logical_and(mesh_points[:, 2] >= min_coord[2], mesh_points[:, 2] <= max_coord[2])
-    )
-    mesh_points = mesh_points[valid_indices]
-    faces = faces[np.isin(faces, np.where(valid_indices)[0]).all(axis=1)]
-
-    # Filter out surfaces not visible from above
-    xz = mesh_points[:, [0, 2]]
-    unique_indices, unique_inverse, unique_counts = np.unique(xz, axis=0, return_inverse=True, return_counts=True)
-    visible_indices = np.zeros_like(mesh_points, dtype=bool)
-    visible_indices[valid_indices] = np.repeat(
-        np.argmax(mesh_points[:, 1], axis=0) == unique_inverse,
-        unique_counts[unique_inverse]
-    )[valid_indices]
-
-    mesh_points = mesh_points[visible_indices]
-    faces = visible_indices[faces]
-
     # try writing to the ply file
     num_verts = mesh_points.shape[0]
-    num_faces = faces.shape[0]
+    num_faces = visible_faces.shape[0]
 
     verts_tuple = np.zeros((num_verts,), dtype=[("x", "f4"), ("y", "f4"), ("z", "f4")])
 
@@ -220,7 +202,7 @@ def convert_sdf_samples_to_ply(
 
     faces_building = []
     for i in range(num_faces):
-        faces_building.append(((faces[i, :].tolist(),)))
+        faces_building.append(((visible_faces[i, :].tolist(),)))
     faces_tuple = np.array(faces_building, dtype=[("vertex_indices", "i4", (3,))])
 
     el_verts = plyfile.PlyElement.describe(verts_tuple, "vertex")
