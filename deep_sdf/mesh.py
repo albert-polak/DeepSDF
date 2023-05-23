@@ -197,19 +197,19 @@ def convert_sdf_samples_to_ply(
     mesh_points = mesh_points[valid_indices]
     faces = faces[np.isin(faces, np.where(valid_indices)[0]).all(axis=1)]
 
-    # # Filter out surfaces not visible from above
-    # mask = mesh_points[:, 1] == np.max(mesh_points[:, 1])
-    # mesh_points = mesh_points[mask]
-    # face_indices = np.where(mask)[0]
-    # face_indices_map = {index: i for i, index in enumerate(face_indices)}
+    # Filter out surfaces not visible from above
+    mask = mesh_points[:, 1] == np.max(mesh_points[:, 1])
+    mesh_points = mesh_points[mask]
+    face_indices = np.where(mask)[0]
+    face_indices_map = {index: i for i, index in enumerate(face_indices)}
 
-    # # Update the face indices to handle missing values
-    # default_index = -1
-    # faces = np.array([[face_indices_map.get(index, default_index) for index in face] for face in faces])
+    # Update the face indices to handle missing values
+    default_index = -1
+    faces = np.array([[face_indices_map.get(index, default_index) for index in face] for face in faces])
 
-    # # Remove faces with missing indices
-    # valid_face_indices = np.all(faces != default_index, axis=1)
-    # faces = faces[valid_face_indices]
+    # Remove faces with missing indices
+    valid_face_indices = np.all(faces != default_index, axis=1)
+    faces = faces[valid_face_indices]
 
     # try writing to the ply file
     num_verts = mesh_points.shape[0]
