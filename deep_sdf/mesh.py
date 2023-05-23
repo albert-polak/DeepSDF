@@ -199,18 +199,15 @@ def convert_sdf_samples_to_ply(
 
     # Filter out surfaces not visible from above
     xz = mesh_points[:, [0, 2]]
-    _, unique_indices = np.unique(xz, axis=0, return_index=True)
-    visible_points_indices = np.zeros_like(mesh_points, dtype=bool)
-    visible_points_indices[unique_indices] = True
+    unique_indices, unique_inverse = np.unique(xz, axis=0, return_inverse=True)
+    visible_indices = np.zeros_like(mesh_points, dtype=bool)
+    visible_indices[valid_indices] = np.logical_and.reduceat(
+        np.argmax(mesh_points[:, 1], axis=0) == unique_inverse,
+        np.cumsum(np.bincount(unique_inverse))
+    )[unique_inverse[valid_indices]]
 
-    # Remove duplicate points that share the same xz but have different y
-    unique_mesh_points = mesh_points[unique_indices]
-    unique_faces = np.zeros_like(faces)
-    for i, face in enumerate(faces):
-        unique_faces[i] = np.where(unique_indices == face)[0]
-
-    mesh_points = unique_mesh_points
-    faces = unique_faces
+    mesh_points = mesh_points[visible_indices]
+    faces = visible_indices[faces]
 
     # try writing to the ply file
     num_verts = mesh_points.shape[0]
