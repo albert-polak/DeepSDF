@@ -93,7 +93,7 @@ def create_mesh(
     samples[:, 0] = ((overall_index.long() / N) / N) % N
 
     # Filter out samples that are not in the top region
-    top_region_mask = samples[:, 1] >= (N / 2)
+    top_region_mask = samples[:, 1] >= (N // 2)
     samples = samples[top_region_mask]
 
     # transform first 3 columns
@@ -127,6 +127,12 @@ def create_mesh(
     sdf_values = sdf_values[:num_voxels]
     sdf_values = sdf_values.reshape(N, N, N)
 
+    # Filter out the bottom portion of the object
+    sdf_values = sdf_values[N // 2:, :, :]
+
+    # Adjust voxel_origin to match the visible portion of the object
+    voxel_origin[1] = voxel_origin[1] + (N // 2) * voxel_size
+
     end = time.time()
     print("sampling takes: %f" % (end - start))
 
@@ -138,7 +144,6 @@ def create_mesh(
         offset,
         scale,
     )
-
 
 def convert_sdf_samples_to_ply(
     pytorch_3d_sdf_tensor,
@@ -171,12 +176,12 @@ def convert_sdf_samples_to_ply(
         numpy_3d_sdf_tensor, level=0.0, spacing=[voxel_size] * 3
     )
 
-    # calculate dot product between normals and view direction
-    dot_product = np.sum(normals * [0, 0, 1], axis=1)
-    upward_normals = normals[dot_product > 0.0]
+    # # calculate dot product between normals and view direction
+    # dot_product = np.sum(normals * [0, -1, 0], axis=1)
+    # upward_normals = normals[dot_product > 0.0]
 
-    # filter faces based on visible normals
-    visible_faces = faces[np.any(dot_product[faces] > 0.0, axis=1)]
+    # # filter faces based on visible normals
+    # visible_faces = faces[np.any(dot_product[faces] > 0.0, axis=1)]
 
     # transform from voxel coordinates to camera coordinates
     # note x and y are flipped in the output of marching_cubes
