@@ -15,6 +15,7 @@ import deep_sdf.utils
 import deep_sdf
 import deep_sdf.workspace as ws
 
+
 def raycast(decoder, latent_vec, filename):
     camera_position = np.array([0.0, 0.0, 1.0])  # Adjust the camera position accordingly
     image_width = 640
@@ -24,7 +25,7 @@ def raycast(decoder, latent_vec, filename):
     table_z = -1.0
     depth_image = np.zeros((image_height, image_width), dtype=np.float32)
     
-    latent_repeat = latent_vec.repeat(image_height * image_width, 1)  # Expand and repeat latent vector
+    latent_repeat = latent_vec.repeat(image_height * image_width, 1)  # Repeat latent vector
     xyz = np.zeros((image_height * image_width, 3), dtype=np.float32)
     
     # Generate the xyz coordinates for all pixels
@@ -34,7 +35,7 @@ def raycast(decoder, latent_vec, filename):
             point_world = camera_position + (point_3d / np.linalg.norm(point_3d))
             xyz[y * image_width + x] = point_world
     
-    latent_repeat = torch.from_numpy(latent_repeat).cuda()
+    latent_repeat = latent_repeat.cuda()
     xyz = torch.from_numpy(xyz).cuda()
     
     # Concatenate latent_repeat and xyz along the second dimension
