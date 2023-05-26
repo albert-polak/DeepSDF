@@ -24,7 +24,7 @@ def raycast(decoder, latent_vec, filename):
     table_z = -1.0
     depth_image = np.zeros((image_height, image_width), dtype=np.float32)
     
-    latent_repeat = latent_vec.unsqueeze(0).repeat(image_height * image_width, 1)  # Expand and repeat latent vector
+    latent_repeat = latent_vec.repeat(image_height * image_width, 1)  # Expand and repeat latent vector
     xyz = np.zeros((image_height * image_width, 3), dtype=np.float32)
     
     # Generate the xyz coordinates for all pixels
