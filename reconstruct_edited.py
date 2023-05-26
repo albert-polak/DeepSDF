@@ -40,7 +40,7 @@ def raycast(decoder, latent_vec, filename):
                 # sdf_value = calculate_sdf_value(point_world[0], point_world[1], z_value)
                 # latent_repeat = latent_vec.expand(1, -1)
                 xyz = torch.from_numpy(np.array([point_world[0], point_world[1], z_value])).cuda()
-                inputs = torch.cat([latent_repeat, xyz], 1)
+                inputs = torch.cat([latent_vec, xyz], 1)
                 sdf_value = decoder(inputs)
                 
                 # Check if the SDF value indicates the object surface is crossed
