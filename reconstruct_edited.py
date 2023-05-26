@@ -23,25 +23,33 @@ def raycast(decoder, latent_vec, filename):
     z_increment = -0.01  # Increment of z value for each pixel
     table_z = -1.0
     depth_image = np.zeros((image_height, image_width), dtype=np.float32)
+    
+    latent_repeat = latent_vec.unsqueeze(0).repeat(image_height * image_width, 1)  # Expand and repeat latent vector
+    xyz = np.zeros((image_height * image_width, 3), dtype=np.float32)
+    
+    # Generate the xyz coordinates for all pixels
+    for y in range(image_height):
+        for x in range(image_width):
+            point_3d = np.array([x - image_width/2, y - image_height/2, focal_length])
+            point_world = camera_position + (point_3d / np.linalg.norm(point_3d))
+            xyz[y * image_width + x] = point_world
+    
+    latent_repeat = torch.from_numpy(latent_repeat).cuda()
+    xyz = torch.from_numpy(xyz).cuda()
+    
+    # Concatenate latent_repeat and xyz along the second dimension
+    inputs = torch.cat([latent_repeat, xyz], dim=1)
+    
+    # Calculate the SDF values using the DeepSDF decoder
+    sdf_values = decoder(inputs)
+    
     # Iterate over each pixel in the image
     for y in range(image_height):
         for x in range(image_width):
-            # Calculate the 3D point in camera coordinates
-            point_3d = np.array([x - image_width/2, y - image_height/2, focal_length])
-            
-            # Convert the 3D point to world coordinates
-            point_world = camera_position + (point_3d / np.linalg.norm(point_3d))
-            
-            # Calculate the SDF value for the current z value
             z_value = camera_position[2]  # Starting z value is the camera position
             prev_sdf_val = None
             while True:
-                # Calculate the SDF value for the current point using your DeepSDF model
-                # sdf_value = calculate_sdf_value(point_world[0], point_world[1], z_value)
-                # latent_repeat = latent_vec.expand(1, -1)
-                xyz = torch.from_numpy(np.array([point_world[0], point_world[1], z_value])).cuda()
-                inputs = torch.cat([latent_vec, xyz], 1)
-                sdf_value = decoder(inputs)
+                sdf_value = sdf_values[y * image_width + x]
                 
                 # Check if the SDF value indicates the object surface is crossed
                 if sdf_value < 0.0:
@@ -51,14 +59,13 @@ def raycast(decoder, latent_vec, filename):
                     z_value = table_z
                     break
                 
-                # Increment the z value and update the world coordinates
                 z_value += z_increment
-                point_world[2] = z_value
+                prev_sdf_val = sdf_value
             
             # Store the z value (depth) in the depth image
             depth_image[y, x] = z_value
 
-    # Save the depth image as an npy files
+    # Save the depth image as an npy file
     np.save(filename+'.npy', depth_image)
 
 
