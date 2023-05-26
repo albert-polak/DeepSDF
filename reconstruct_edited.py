@@ -39,6 +39,7 @@ def raycast(decoder, latent_vec, filename):
                 # Calculate the SDF value for the current point using your DeepSDF model
                 # sdf_value = calculate_sdf_value(point_world[0], point_world[1], z_value)
                 latent_repeat = latent_vec.expand(1, -1)
+                xyz = torch.from_numpy(np.array([point_world[0], point_world[1], z_value]))
                 inputs = torch.cat([latent_repeat, point_world[0], point_world[1], z_value], 1)
                 sdf_value = decoder(inputs)
                 
