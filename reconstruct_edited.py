@@ -328,11 +328,13 @@ if __name__ == "__main__":
             if not save_latvec_only:
                 start = time.time()
                 with torch.no_grad():
-                    deep_sdf.mesh.create_mesh(
-                        decoder, latent, mesh_filename, N=256, max_batch=int(2 ** 18)
-                    )
-                    raycast(decoder, latent, filename)
-                logging.debug("total time: {}".format(time.time() - start))
+                    # deep_sdf.mesh.create_mesh(
+                    #     decoder, latent, mesh_filename, N=256, max_batch=int(2 ** 18)
+                    # )
+
+                    raycast(decoder, latent, mesh_filename)
+                    
+                print("total time: {}".format(time.time() - start))
 
             if not os.path.exists(os.path.dirname(latent_filename)):
                 os.makedirs(os.path.dirname(latent_filename))
