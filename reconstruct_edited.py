@@ -16,12 +16,12 @@ import deep_sdf
 import deep_sdf.workspace as ws
 
 def raycast(decoder, latent_vec, filename):
-    camera_position = np.array([0, 0, 0])  # Adjust the camera position accordingly
+    camera_position = np.array([0.0, 0.0, 1.0])  # Adjust the camera position accordingly
     image_width = 640
     image_height = 480
     focal_length = 500  # Adjust the focal length of the camera accordingly
-    z_increment = 0.01  # Increment of z value for each pixel
-    table_z = 1.0
+    z_increment = -0.01  # Increment of z value for each pixel
+    table_z = -1.0
     depth_image = np.zeros((image_height, image_width), dtype=np.float32)
     # Iterate over each pixel in the image
     for y in range(image_height):
