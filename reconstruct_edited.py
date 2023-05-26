@@ -48,7 +48,7 @@ def raycast(decoder, latent_vec, filename):
     for y in range(image_height):
         for x in range(image_width):
             z_value = camera_position[2]  # Starting z value is the camera position
-            prev_sdf_val = None
+            prev_sdf_val = 1000
             while True:
                 sdf_value = sdf_values[y * image_width + x]
                 
