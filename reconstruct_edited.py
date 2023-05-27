@@ -15,8 +15,16 @@ import deep_sdf.utils
 import deep_sdf
 import deep_sdf.workspace as ws
 
+def pixel_to_world(x, y, z, camera_pos):
+    # Convert pixel coordinates to world coordinates
+    world_x = (x - camera_pos[0]) * z / camera_pos[2]
+    world_y = (y - camera_pos[1]) * z / camera_pos[2]
+    world_z = z
+
+    return (world_x, world_y, world_z)
 
 def raycast(decoder, latent_vec, filename):
+    decoder.eval()
     camera_position = np.array([0.0, 0.0, 1.0])  # Adjust the camera position accordingly
     image_width = 640
     image_height = 480
@@ -69,6 +77,53 @@ def raycast(decoder, latent_vec, filename):
     # Save the depth image as an npy file
     np.save(filename+'.npy', depth_image)
 
+def raycast2(decoder, latent_vec, filename):
+    decoder.eval()
+
+    camera_position = torch.tensor([0.0, 0.0, 1.0])  # Update with your camera position
+    image_size = (640, 480)  # Update with your image size
+    voxel_size = 0.01  # Update with your desired voxel size
+
+    # Calculate the voxel origin based on the image size and voxel size
+    voxel_origin = [
+        camera_position[0] - voxel_size * (image_size[0] // 2),
+        camera_position[1] - voxel_size * (image_size[1] // 2),
+        camera_position[2]
+    ]
+
+    sdf_values = torch.zeros(image_size)
+
+    for y in range(image_size[1]):
+        for x in range(image_size[0]):
+            # Calculate the ray direction for the current pixel
+            ray_direction = torch.tensor([
+                (x * voxel_size) + voxel_origin[0],
+                (y * voxel_size) + voxel_origin[1],
+                voxel_origin[2]
+            ]) - camera_position
+
+            ray_direction = ray_direction / torch.norm(ray_direction)
+
+            # Perform ray marching until SDF value becomes negative or starts to rise again
+            current_position = camera_position.clone()
+            prev_sdf_value = float('inf')
+            step_size = voxel_size / 2.0
+
+            while True:
+                # Calculate the SDF value at the current position
+                sdf_value = deep_sdf.utils.decode_sdf(decoder, latent_vec, current_position.unsqueeze(0)).item()
+
+                # Store the SDF value for the current pixel
+                sdf_values[y, x] = sdf_value
+
+                # Check if the SDF value is less than zero or starts to rise again
+                if sdf_value < 0 or sdf_value > prev_sdf_value:
+                    break
+
+                prev_sdf_value = sdf_value
+                current_position += ray_direction * step_size
+
+    return sdf_values
 
 def reconstruct(
     decoder,
@@ -341,7 +396,7 @@ if __name__ == "__main__":
                     #     decoder, latent, mesh_filename, N=256, max_batch=int(2 ** 18)
                     # )
 
-                    raycast(decoder, latent, mesh_filename)
+                    raycast2(decoder, latent, mesh_filename)
                     
                 print("total time: {}".format(time.time() - start))
 
