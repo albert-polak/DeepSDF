@@ -127,7 +127,7 @@ def raycast2(decoder, latent_vec, filename):
 
     device = latent_vec.device
 
-    camera_position = torch.tensor([0.0, 0.0, 1.0])  # Update with your camera position
+    camera_position = torch.tensor([0.0, 0.0, -2.0])  # Update with your camera position
     image_size = (640, 480)  # Update with your image size
     voxel_size = 0.01  # Update with your desired voxel size
     margin = 1 
@@ -257,6 +257,59 @@ def reconstruct(
         loss_num = loss.cpu().data.numpy()
 
     return loss_num, latent
+
+def raycast3(decoder, latent_vec, filename):
+    decoder.eval()
+    # Example usage
+
+    image_width = 640
+    image_height = 480
+    voxel_resolution = 256
+    camera_distance = 5.0
+    # Set up parameters
+    bounding_box = [-1, 1]
+    voxel_size = (bounding_box[1] - bounding_box[0]) / voxel_resolution
+    ray_direction = torch.tensor([0, 0, -1])  # Assuming the camera is looking straight down the negative z-axis
+    camera_position = torch.tensor([0, 0, camera_distance])
+
+    # Initialize depth image
+    depth_image = np.zeros((image_height, image_width))
+
+    # Define the range of pixels to search within the middle region of the image
+    middle_region_width = image_width // 4  # Adjust this value to change the width of the middle region
+    middle_region_start_x = (image_width - middle_region_width) // 2
+    middle_region_end_x = middle_region_start_x + middle_region_width
+
+    middle_region_height = image_height // 4  # Adjust this value to change the height of the middle region
+    middle_region_start_y = (image_height - middle_region_height) // 2
+    middle_region_end_y = middle_region_start_y + middle_region_height
+
+    # Calculate SDF values for each pixel
+    for y in range(middle_region_start_y, middle_region_end_y):
+        for x in range(middle_region_start_x, middle_region_end_x):
+            pixel_position = torch.tensor([
+                (x - image_width / 2) * voxel_size,
+                (y - image_height / 2) * voxel_size,
+                camera_distance
+            ])
+
+            sdf_value = None  # Initial SDF value at camera position
+            prev_sdf_value = float('inf')
+            # Perform raycasting-like method
+            while True:
+                world_position = camera_position + pixel_position
+                sample = torch.tensor(world_position, dtype=torch.float32).unsqueeze(0).cuda()
+                sdf_value = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample)
+                pixel_position += voxel_size * ray_direction
+                if sdf_value < 0 or sdf_value > prev_sdf_value:            
+                    break
+                prev_sdf_value = sdf_value
+
+            # Store the sdf_value at the last valid position (when it becomes negative)
+            depth_image[x, y] = sdf_value.item()
+
+    # Save the depth image as an npy file
+    np.save(filename + '.npy', depth_image)
 
 
 if __name__ == "__main__":
