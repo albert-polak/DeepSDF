@@ -77,13 +77,60 @@ def raycast(decoder, latent_vec, filename):
     # Save the depth image as an npy file
     np.save(filename+'.npy', depth_image)
 
+def find_bounding_box(decoder, latent_vec, camera_position, voxel_size, image_size, margin):
+    device = latent_vec.device
+
+    # Set the z value for sampling the xy plane
+    z_value = 0.5
+
+    # Create a grid of x and y coordinates
+    x_coords = torch.linspace(
+        camera_position[0] - (image_size[0] // 2) * voxel_size,
+        camera_position[0] + (image_size[0] // 2) * voxel_size,
+        image_size[0]
+    ).to(device)
+    y_coords = torch.linspace(
+        camera_position[1] - (image_size[1] // 2) * voxel_size,
+        camera_position[1] + (image_size[1] // 2) * voxel_size,
+        image_size[1]
+    ).to(device)
+
+    # Generate the mesh grid
+    x_grid, y_grid = torch.meshgrid(x_coords, y_coords)
+    xy_coords = torch.stack([x_grid, y_grid], dim=2).reshape(-1, 2)
+
+    # Set the z value for the xy coordinates
+    z_coords = torch.full((image_size[0] * image_size[1],), z_value, device=device)
+
+    # Concatenate the coordinates
+    sample_coords = torch.stack([xy_coords[:, 0], xy_coords[:, 1], z_coords], dim=1)
+
+    # Calculate the SDF values for the sample coordinates
+    sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_coords)
+
+    # Find the indices with SDF values close to zero
+    close_indices = torch.where(torch.abs(sdf_values) < margin)[0]
+
+    if len(close_indices) > 0:
+        # Get the minimum and maximum x and y indices
+        min_x, max_x = torch.min(xy_coords[close_indices, 0]), torch.max(xy_coords[close_indices, 0])
+        min_y, min_x = torch.min(xy_coords[close_indices, 1]), torch.max(xy_coords[close_indices, 1])
+    else:
+        # If no indices are close to zero, set the bounding box to the whole image size
+        min_x, max_x = 0, image_size[0] - 1
+        min_y, max_y = 0, image_size[1] - 1
+
+    return min_x, max_x, min_y, max_y
+
 def raycast2(decoder, latent_vec, filename):
     decoder.eval()
+
+    device = latent_vec.device
 
     camera_position = torch.tensor([0.0, 0.0, 1.0])  # Update with your camera position
     image_size = (640, 480)  # Update with your image size
     voxel_size = 0.01  # Update with your desired voxel size
-
+    margin = 1 
     # Calculate the voxel origin based on the image size and voxel size
     voxel_origin = [
         camera_position[0] - voxel_size * (image_size[0] // 2),
@@ -91,39 +138,51 @@ def raycast2(decoder, latent_vec, filename):
         camera_position[2]
     ]
 
-    sdf_values = torch.zeros(image_size)
+    sdf_values = torch.zeros(image_size).to(device) 
+    depth_image = np.zeros(image_size, dtype=np.float32)
 
-    for y in range(image_size[1]):
-        for x in range(image_size[0]):
-            # Calculate the ray direction for the current pixel
-            ray_direction = torch.tensor([
-                (x * voxel_size) + voxel_origin[0],
-                (y * voxel_size) + voxel_origin[1],
-                voxel_origin[2]
-            ]) - camera_position
+    # Find the bounding box for the xy plane
+    min_x, max_x, min_y, max_y = find_bounding_box(decoder, latent_vec, camera_position, voxel_size, image_size, margin)
+    print(min_x, max_x, min_y, max_y)
+    for y in range(min_y, max_y + 1):
+      for x in range(min_x, max_x + 1):
+        # print(x,y)
+        # Calculate the ray direction for the current pixel
+        ray_direction = torch.tensor([
+            (x * voxel_size) + voxel_origin[0],
+            (y * voxel_size) + voxel_origin[1],
+            voxel_origin[2]
+        ]) - camera_position
 
-            ray_direction = ray_direction / torch.norm(ray_direction)
+        ray_direction = ray_direction / torch.norm(ray_direction)
 
-            # Perform ray marching until SDF value becomes negative or starts to rise again
-            current_position = camera_position.clone()
-            prev_sdf_value = float('inf')
-            step_size = voxel_size / 2.0
+        # Perform ray marching until SDF value becomes negative or starts to rise again
+        current_position = camera_position.clone().to(device)
+        prev_sdf_value = float('inf')
+        step_size = voxel_size / 2.0
 
-            while True:
-                # Calculate the SDF value at the current position
-                sdf_value = deep_sdf.utils.decode_sdf(decoder, latent_vec, current_position.unsqueeze(0)).item()
+        while True:
+            # Calculate the SDF value at the current position
+            sdf_value = deep_sdf.utils.decode_sdf(decoder, latent_vec, current_position.unsqueeze(0)).item()
 
-                # Store the SDF value for the current pixel
-                sdf_values[y, x] = sdf_value
+            # Store the SDF value for the current pixel
+            sdf_values[x, y] = sdf_value
 
-                # Check if the SDF value is less than zero or starts to rise again
-                if sdf_value < 0 or sdf_value > prev_sdf_value:
-                    break
+            # Store the z value (depth) in the depth image
+            depth_image[x, y] = current_position[2].item()
 
-                prev_sdf_value = sdf_value
-                current_position += ray_direction * step_size
+            # Check if the SDF value is less than zero or starts to rise again
+            if sdf_value < 0 or sdf_value > prev_sdf_value:
+                
+                break
 
-    return sdf_values
+            prev_sdf_value = sdf_value
+            current_position += ray_direction.to(device) * step_size
+
+                
+
+    # Save the depth image as an npy file
+    np.save(filename + '.npy', depth_image)
 
 def reconstruct(
     decoder,
