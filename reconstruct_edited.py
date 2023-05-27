@@ -325,6 +325,7 @@ def raycast4(decoder, latent_vec, filename):
     batch_size = 128
     # Set up parameters
     bounding_box = [-1, 1]
+    voxel_origin = [-1, -1, -1]
     voxel_resolution = max(image_width, image_height)
     voxel_size = (bounding_box[1] - bounding_box[0]) / (voxel_resolution - 1)
     ray_direction = torch.tensor([0, 0, -1])  # Assuming the camera is looking straight down the negative z-axis
@@ -342,8 +343,8 @@ def raycast4(decoder, latent_vec, filename):
 
 
     # Fill in the queries tensor
-    queries[:, 0] = (pixel_coords[:, 1] - image_width / 2) * voxel_size
-    queries[:, 1] = (pixel_coords[:, 0] - image_height / 2) * voxel_size
+    queries[:, 0] = (pixel_coords[:, 1] - image_width / 2) * voxel_size + voxel_origin[0]
+    queries[:, 1] = (pixel_coords[:, 0] - image_height / 2) * voxel_size + voxel_origin[0]
 
     # Repeat the latent vector to match the number of queries
     latent_repeat = latent_vec.repeat(num_pixels, 1)
