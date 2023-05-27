@@ -266,50 +266,54 @@ def raycast3(decoder, latent_vec, filename):
     image_height = 480
     voxel_resolution = 256
     camera_distance = 5.0
+    batch_size = 128
     # Set up parameters
     bounding_box = [-1, 1]
-    voxel_size = (bounding_box[1] - bounding_box[0]) / voxel_resolution
+    voxel_resolution = max(image_width, image_height)
+    voxel_size = (bounding_box[1] - bounding_box[0]) / (voxel_resolution - 1)
     ray_direction = torch.tensor([0, 0, -1])  # Assuming the camera is looking straight down the negative z-axis
     camera_position = torch.tensor([0, 0, camera_distance])
 
-    # Initialize depth image
-    depth_image = np.zeros((image_height, image_width))
+    # Generate pixel coordinates
+    pixel_coords = torch.meshgrid(torch.arange(image_height), torch.arange(image_width))
+    pixel_coords = torch.stack(pixel_coords, dim=2).reshape(-1, 2)
 
-    # Define the range of pixels to search within the middle region of the image
-    middle_region_width = image_width // 4  # Adjust this value to change the width of the middle region
-    middle_region_start_x = (image_width - middle_region_width) // 2
-    middle_region_end_x = middle_region_start_x + middle_region_width
+    # Calculate SDF values and record z values for pixel coordinates in batches
+    num_pixels = pixel_coords.shape[0]
+    z_values = torch.zeros(num_pixels)
+    start_index = 0
 
-    middle_region_height = image_height // 4  # Adjust this value to change the height of the middle region
-    middle_region_start_y = (image_height - middle_region_height) // 2
-    middle_region_end_y = middle_region_start_y + middle_region_height
+    while start_index < num_pixels:
+        end_index = min(start_index + batch_size, num_pixels)
+        batch_coords = pixel_coords[start_index:end_index]
+        world_positions = torch.cat([
+            ((batch_coords[:, 1] - image_width / 2) * voxel_size).unsqueeze(1),
+            ((batch_coords[:, 0] - image_height / 2) * voxel_size).unsqueeze(1),
+            camera_distance * torch.ones(end_index - start_index, 1)
+        ], dim=1)
+        print(world_positions)
+        samples = world_positions.cuda()
+        sdf_batch = deep_sdf.utils.decode_sdf(decoder, latent_vec, samples).squeeze(0)
+        z_batch = torch.zeros(end_index - start_index).cuda()
 
-    # Calculate SDF values for each pixel
-    for y in range(middle_region_start_y, middle_region_end_y):
-        for x in range(middle_region_start_x, middle_region_end_x):
-            pixel_position = torch.tensor([
-                (x - image_width / 2) * voxel_size,
-                (y - image_height / 2) * voxel_size,
-                camera_distance
-            ])
+        # Record z values for pixels where SDF <= 0
+        for i in range(end_index - start_index):
+            sdf_value = sdf_batch[i]
+            if sdf_value <= 0:
+                z_value = camera_distance - sdf_value * voxel_size
+            else:
+                z_value = 2.0
+            z_batch[i] = z_value
 
-            sdf_value = None  # Initial SDF value at camera position
-            prev_sdf_value = float('inf')
-            # Perform raycasting-like method
-            while True:
-                world_position = camera_position + pixel_position
-                sample = torch.tensor(world_position, dtype=torch.float32).unsqueeze(0).cuda()
-                sdf_value = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample)
-                pixel_position += voxel_size * ray_direction
-                if sdf_value < 0 or sdf_value > prev_sdf_value:            
-                    break
-                prev_sdf_value = sdf_value
+        z_values[start_index:end_index] = z_batch
 
-            # Store the sdf_value at the last valid position (when it becomes negative)
-            depth_image[x, y] = sdf_value.item()
+        start_index += batch_size
 
-    # Save the depth image as an npy file
+    # Reshape the z_values to match the image dimensions
+    depth_image = z_values.reshape(image_height, image_width).numpy()
+
     np.save(filename + '.npy', depth_image)
+
 
 
 if __name__ == "__main__":
