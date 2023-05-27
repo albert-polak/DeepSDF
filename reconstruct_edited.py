@@ -508,7 +508,7 @@ if __name__ == "__main__":
                     #     decoder, latent, mesh_filename, N=256, max_batch=int(2 ** 18)
                     # )
 
-                    raycast2(decoder, latent, mesh_filename)
+                    raycast3(decoder, latent, mesh_filename)
                     
                 print("total time: {}".format(time.time() - start))
 
