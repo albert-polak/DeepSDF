@@ -322,7 +322,7 @@ def raycast4(decoder, latent_vec, filename):
     image_height = 480
     voxel_resolution = 256
     camera_distance = 1.0
-    batch_size = 128
+
     # Set up parameters
     bounding_box = [-1, 1]
     voxel_origin = [-1, -1, -1]
@@ -344,16 +344,17 @@ def raycast4(decoder, latent_vec, filename):
 
     # Fill in the queries tensor
     queries[:, 0] = (pixel_coords[:, 1] - image_width / 2) * voxel_size + voxel_origin[0]
-    queries[:, 1] = (pixel_coords[:, 0] - image_height / 2) * voxel_size + voxel_origin[0]
-
+    queries[:, 2] = (pixel_coords[:, 0] - image_height / 2) * voxel_size + voxel_origin[0]
+    
     # Repeat the latent vector to match the number of queries
-    latent_repeat = latent_vec.repeat(num_pixels, 1)
+    # latent_repeat = latent_vec.repeat(num_pixels, 1)
     
     # Batch size for decoding SDF values
     max_batch = 8192
 
     # Loop through z-values in batches
     for head in range(0, num_pixels, max_batch):
+        queries[head, 1] = camera_distance - head * voxel_size + voxel_origin[0]
         tail = min(head + max_batch, num_pixels)
         sample_subset = queries[head:tail].cuda()
         sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
@@ -362,7 +363,7 @@ def raycast4(decoder, latent_vec, filename):
         for i in range(head, tail):
             # Record z value if any SDF <= 0
             if sdf_values[i - head] <= 0:
-                z_values[i] = camera_distance - queries[i, 2] * voxel_size
+                z_values[i] = camera_distance - queries[i, 1]
             else:
                 z_values[i] = 0.0
 
