@@ -373,7 +373,66 @@ def raycast4(decoder, latent_vec, filename):
 
     np.save(filename + '.npy', depth_image)
 
+def raycast5(decoder, latent_vec, filename):
+    decoder.eval()
+    # Example usage
 
+    image_width = 640
+    image_height = 480
+    voxel_resolution = 256
+    camera_distance = 1.2
+
+    # Set up parameters
+    bounding_box = [-1, 1]
+    voxel_resolution = max(image_width, image_height)
+    voxel_size = (bounding_box[1] - bounding_box[0]) / (voxel_resolution - 1)
+
+    # Generate pixel coordinates
+    pixel_coords = torch.meshgrid(torch.arange(image_height), torch.arange(image_width))
+    pixel_coords = torch.stack(pixel_coords, dim=2).reshape(-1, 2)
+    
+
+    # Prepare tensors for z-values and queries
+    num_pixels = pixel_coords.shape[0]
+    z_values = torch.zeros(num_pixels, device=latent_vec.device)
+    z_range = torch.arange(-1, 1, 0.01)
+    
+    queries = torch.zeros(num_pixels, 3, device=latent_vec.device)
+
+
+    # Fill in the queries tensor
+    queries[:, 0] = (pixel_coords[:, 1] - image_width / 2) * voxel_size 
+    queries[:, 2] = (pixel_coords[:, 0] - image_height / 2) * voxel_size
+    print(queries[:,0])
+    # Repeat the latent vector to match the number of queries
+    # latent_repeat = latent_vec.repeat(num_pixels, 1)
+    
+    # Batch size for decoding SDF values
+    max_batch = 307200
+    # Loop through z-values in batches
+    for head in range(0, num_pixels, max_batch):
+        tail = min(head + max_batch, num_pixels)
+        queries[head:tail, 1] = 0.0
+        
+        sample_subset = queries[head:tail].cuda()
+        sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
+        sdf_values = sdf_values.squeeze(1).detach().cpu()
+
+        for i in range(head, tail):
+            # Record z value if any SDF <= 0
+            if sdf_values[i - head] <= 0:
+                z_values[i] = camera_distance - queries[i, 1]
+            else:
+                z_values[i] = 0.0
+    more_than_zero = z_values.reshape(image_height, image_width).cpu().numpy() > 0
+    # Get the coordinates of pixels where SDF values are greater than zero
+    positive_coords = pixel_coords[more_than_zero.flatten()]
+
+    # Reshape the z_values to match the image dimensions
+    depth_image = z_values.reshape(image_height, image_width).cpu().numpy()
+
+
+    np.save(filename + '.npy', depth_image)
 
 if __name__ == "__main__":
 
