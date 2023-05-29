@@ -384,7 +384,8 @@ def raycast5(decoder, latent_vec, filename):
 
     # Set up parameters
     bounding_box = [-1, 1]
-    voxel_resolution = max(image_width, image_height)
+    # voxel_resolution = max(image_width, image_height)
+    voxel_resolution = 120
     voxel_size = (bounding_box[1] - bounding_box[0]) / (voxel_resolution - 1)
 
     # Generate pixel coordinates
@@ -395,7 +396,7 @@ def raycast5(decoder, latent_vec, filename):
     # Prepare tensors for z-values and queries
     num_pixels = pixel_coords.shape[0]
     z_values = torch.zeros(num_pixels, device=latent_vec.device)
-    z_range = torch.arange(-1, 1, 0.01)
+    z_range = np.arange(-1, 1, 0.01, dtype=np.float16)
     
     queries = torch.zeros(num_pixels, 3, device=latent_vec.device)
 
@@ -403,7 +404,7 @@ def raycast5(decoder, latent_vec, filename):
     # Fill in the queries tensor
     queries[:, 0] = (pixel_coords[:, 1] - image_width / 2) * voxel_size 
     queries[:, 2] = (pixel_coords[:, 0] - image_height / 2) * voxel_size
-    print(queries[:,0])
+
     # Repeat the latent vector to match the number of queries
     # latent_repeat = latent_vec.repeat(num_pixels, 1)
     
@@ -414,7 +415,9 @@ def raycast5(decoder, latent_vec, filename):
         tail = min(head + max_batch, num_pixels)
         queries[head:tail, 1] = 0.0
         
+        
         sample_subset = queries[head:tail].cuda()
+
         sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
         sdf_values = sdf_values.squeeze(1).detach().cpu()
 
@@ -429,27 +432,27 @@ def raycast5(decoder, latent_vec, filename):
     positive_coords = pixel_coords[more_than_zero.flatten()]
     # Reshape the z_values to match the image dimensions
     depth_image = z_values.reshape(image_height, image_width).cpu().numpy()
+
+    print(len(positive_coords[:]))
     
-    for x in positive_coords[0]:
-        for y in positive_coords[1]:
-            querry = np.array([[x]*z_range.shape[0], z_range, y*z_range.shape[0]])
-            sample_subset = torch.tensor(querry, device=latent_vec.device)
-            sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
-            sdf_values = sdf_values.squeeze(1).detach().cpu()
+    for x, y in positive_coords[:]:
+      print(x,y )
+      querry = np.array([[(x - image_width / 2) * voxel_size]*len(z_range), z_range, 
+      [(y- image_height / 2) * voxel_size]*len(z_range)], dtype=np.float16)
+      
+      sample_subset = torch.from_numpy(querry).cuda()
+      sample_subset = sample_subset.swapaxes(0,1)
 
-        for i in range(0, z_range.shape[0]):
-            # Record z value if any SDF <= 0
-            if sdf_values[i] <= 0:
-                if depth_image[x][y] == 0:
-                    depth_image[x][y] = camera_distance - z_range[i]
-            else:
-                z_values[i] = 0.0
+      sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
+      sdf_values = sdf_values.squeeze(1).detach().cpu()
 
-
-    
-
-
-    np.save(filename + '.npy', depth_image)
+      for i in range(0, z_range.shape[0]):
+          # Record z value if any SDF <= 0
+          if sdf_values[i] <= 0:
+              if depth_image[x][y] == 0:
+                  depth_image[x][y] = camera_distance - z_range[i]
+          else:
+              z_values[i] = 0.0
 
 if __name__ == "__main__":
 
