@@ -396,7 +396,7 @@ def raycast5(decoder, latent_vec, filename):
     # Prepare tensors for z-values and queries
     num_pixels = pixel_coords.shape[0]
     z_values = torch.zeros(num_pixels, device=latent_vec.device)
-    z_range = np.arange(-1, 1, 0.01, dtype=np.float16)
+    z_range = np.arange(1, -1, 0.01, dtype=np.float16)
     
     queries = torch.zeros(num_pixels, 3, device=latent_vec.device)
 
