@@ -427,9 +427,26 @@ def raycast5(decoder, latent_vec, filename):
     more_than_zero = z_values.reshape(image_height, image_width).cpu().numpy() > 0
     # Get the coordinates of pixels where SDF values are greater than zero
     positive_coords = pixel_coords[more_than_zero.flatten()]
-
     # Reshape the z_values to match the image dimensions
     depth_image = z_values.reshape(image_height, image_width).cpu().numpy()
+    
+    for x in positive_coords[0]:
+        for y in positive_coords[1]:
+            querry = np.array([[x]*z_range.shape[0], z_range, y*z_range.shape[0]])
+            sample_subset = torch.tensor(querry, device=latent_vec.device)
+            sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
+            sdf_values = sdf_values.squeeze(1).detach().cpu()
+
+        for i in range(0, z_range.shape[0]):
+            # Record z value if any SDF <= 0
+            if sdf_values[i] <= 0:
+                if depth_image[x][y] == 0:
+                    depth_image[x][y] = camera_distance - z_range[i]
+            else:
+                z_values[i] = 0.0
+
+
+    
 
 
     np.save(filename + '.npy', depth_image)
@@ -630,7 +647,7 @@ if __name__ == "__main__":
                     #     decoder, latent, mesh_filename, N=256, max_batch=int(2 ** 18)
                     # )
 
-                    raycast3(decoder, latent, mesh_filename)
+                    raycast5(decoder, latent, mesh_filename)
                     
                 print("total time: {}".format(time.time() - start))
 
