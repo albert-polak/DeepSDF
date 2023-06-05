@@ -15,6 +15,18 @@ import deep_sdf.utils
 import deep_sdf
 import deep_sdf.workspace as ws
 
+class CameraModel:
+    def __init__(self, focalLengthX, focalLengthY, principalPointX, principalPointY):
+        self.PHCPModel = np.array([
+            [1/focalLengthX, 0, -principalPointX/focalLengthX],
+            [0, 1/focalLengthY, -principalPointY/focalLengthY],
+            [0, 0, 1]
+        ])
+
+    def projectPoint(self, point3D):
+        projectedPoint = np.dot(self.PHCPModel, point3D)
+        return projectedPoint[:2] / projectedPoint[2]
+
 def pixel_to_world(x, y, z, camera_pos):
     # Convert pixel coordinates to world coordinates
     world_x = (x - camera_pos[0]) * z / camera_pos[2]
@@ -459,6 +471,75 @@ def raycast5(decoder, latent_vec, filename):
 
       # print(len(np.nonzero(depth_image)))
     # print(len(np.nonzero(depth_image)))
+    np.save(filename + '.npy', depth_image)
+
+
+def raycast6(decoder, latent_vec, filename):
+    decoder.eval()
+
+    camera_model = CameraModel(525.0, 525.0, 319.5, 239.5)
+    # Example usage
+    image_width = 640
+    image_height = 480
+    voxel_resolution = 256
+    camera_distance = 1.2
+
+    # Set up parameters
+    bounding_box = [-1, 1]
+    voxel_resolution = max(image_width, image_height)
+    voxel_size = (bounding_box[1] - bounding_box[0]) / (voxel_resolution - 1)
+
+    # Generate pixel coordinates
+    pixel_coords = torch.meshgrid(torch.arange(image_height), torch.arange(image_width))
+    pixel_coords = torch.stack(pixel_coords, dim=2).reshape(-1, 2)
+
+    # Prepare tensors for z-values and queries
+    num_pixels = pixel_coords.shape[0]
+    z_values = torch.zeros(num_pixels, device=latent_vec.device)
+    z_range = torch.arange(1, -1, -0.01)
+    queries = torch.zeros(num_pixels, 3, device=latent_vec.device)
+
+    # Transform pixel coordinates to 3D world coordinates using the camera model
+    for i in range(num_pixels):
+        u, v = pixel_coords[i]
+        point2D = torch.tensor([u, v, 1])
+        point3D = torch.tensor(camera_model.projectPoint(point2D))
+        queries[i] = point3D
+
+    # Repeat the latent vector to match the number of queries
+    latent_repeat = latent_vec.repeat(num_pixels, 1)
+
+    # Batch size for decoding SDF values
+    max_batch = 307200
+
+    # Loop through z-values in batches
+    for head in range(0, num_pixels, max_batch):
+        tail = min(head + max_batch, num_pixels)
+        queries[head:tail, 1] = 0.1
+
+        sample_subset = queries[head:tail].cuda()
+
+        sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_repeat[head:tail], sample_subset)
+        sdf_values = sdf_values.squeeze(1).detach().cpu()
+
+        for i in range(head, tail):
+            # Record z value if any SDF <= 0
+            if sdf_values[i - head] <= 0:
+                z_values[i] = camera_distance - queries[i, 1]
+            else:
+                z_values[i] = 0.0
+
+    more_than_zero = z_values.reshape(image_height, image_width).cpu().numpy() > 0
+
+    # Get the coordinates of pixels where SDF values are greater than zero
+    positive_coords = pixel_coords[more_than_zero.flatten()]
+
+    # Reshape the z_values to match the image dimensions
+    depth_image = np.zeros((image_height, image_width))
+
+    for y, x in positive_coords:
+        depth_image[y][x] = camera_distance - queries[y * image_width + x, 1]
+
     np.save(filename + '.npy', depth_image)
 
 if __name__ == "__main__":
