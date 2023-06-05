@@ -24,12 +24,11 @@ class CameraModel:
               [0, 1 / self.focalLength[1], -self.focalAxis[1] / self.focalLength[1]],
               [0, 0, 1]
           ], dtype=np.float64)
-        self.camera_position = np.array([0.0, 0.0, 1.0])
 
     def getPoint(self, u, v, depth):
-        point = np.array([u, v, 1])
-        point3D = depth * np.dot(self.PHCPModel, point)
-        point3D += self.camera_position
+        point = np.column_stack((u, v, np.ones_like(u)))  # Stack u, v, 1 columns horizontally
+        depth = depth.reshape(-1, 1)  # Reshape depth to match the shape of point
+        point3D = depth * np.dot(self.PHCPModel, point.T).T  # Perform dot product and transpose back
         return point3D
 
 def pixel_to_world(x, y, z, camera_pos):
@@ -480,51 +479,63 @@ def raycast5(decoder, latent_vec, filename):
 
 
 def raycast6(decoder, latent_vec, filename):
-
     image_width = 640
     image_height = 480
-    overall_index = torch.arange(0, N ** 3, 1, out=torch.LongTensor())
-    samples = torch.zeros(N ** 3, 4)
-    bounding_box = [-1, 1]
     voxel_resolution = max(image_width, image_height)
-    # voxel_resolution = 120
+    bounding_box = [-1, 1]
     voxel_size = (bounding_box[1] - bounding_box[0]) / (voxel_resolution - 1)
+    
 
     # Create a depth image with z-values corresponding to sdf values
     depth_image = np.zeros((480, 640))
     camera_model = CameraModel(1, 1, 0, 0)
 
-    for u in range(640):
-        for v in range(480):
-            print(u, v)
-            # Convert pixel coordinates to the range -1:1
-            u_norm = (u - 640 / 2) * voxel_size 
-            v_norm = (v - 480 / 2) * voxel_size
-            # u_norm = (2 * u / 640) - 1
-            # v_norm = (2 * v / 480) - 1
+    u_range = np.arange(image_width)
+    v_range = np.arange(image_height)
 
-            # Get the ray direction in camera coordinates
-            ray_direction = camera_model.getPoint(u_norm, v_norm, 1.0)
-            ray_direction /= np.linalg.norm(ray_direction)  # Normalize the ray direction
+    u_grid, v_grid = np.meshgrid(u_range, v_range)
 
-            # Perform raycasting
-            depth = 0.0
-            step_size = -0.1  # Adjust the step size as needed
-            max_depth = -2.0  # Adjust the maximum depth as needed
+    # print(u_grid)
+    # # Reshape the grid indices to match the shape of the mask
+    # u_grid = u_grid.reshape(-1)
+    # v_grid = v_grid.reshape(-1)
 
-            while depth >= max_depth:
-                point3D = camera_model.getPoint(u, v, depth)
-                point3D[0] = (point3D[0] - 640 / 2) * voxel_size 
-                point3D[1] = (point3D[1] - 480 / 2) * voxel_size
-                # print(point3D)
-                sdf_value = deep_sdf.utils.decode_sdf(
-                    decoder, latent_vec, torch.from_numpy(point3D.reshape(1, 3)).cuda().float()
-                )
-                # print(point3D)
-                if sdf_value <= 0:
-                    depth_image[v, u] = depth
-                    break
-                depth += step_size
+    # Reshape the grid indices to match the shape of the mask
+    u_grid = u_grid.flatten()
+    v_grid = v_grid.flatten()
+
+    u_norm_batch = (u_grid * voxel_size).flatten()
+    v_norm_batch = (v_grid * voxel_size).flatten()
+
+    
+
+    # ray_directions = camera_model.getPoint(u_norm_batch, v_norm_batch, 1.0)
+    # ray_directions /= np.linalg.norm(ray_directions, axis=1, keepdims=True)  # Normalize the ray directions
+
+    depths = np.zeros(len(u_norm_batch))
+    step_size = 0.1  # Adjust the step size as needed
+    max_depth = 2.0  # Adjust the maximum depth as needed
+
+    while np.any(depths >= max_depth):
+        point3D_batch = camera_model.getPoint(u_grid.flatten(), v_grid.flatten(), depths)
+        print(point3D_batch)
+        point3D_batch[:, 0] = (point3D_batch[:, 0] - image_width/2) * voxel_size
+        point3D_batch[:, 1] = (point3D_batch[:, 1] - image_height/2) * voxel_size
+        point3D_batch = point3D_batch[:, [0,2,1]]
+        # print(point3D_batch)
+        sdf_values = deep_sdf.utils.decode_sdf(
+            decoder, latent_vec, torch.from_numpy(point3D_batch).cuda().float()
+        )
+
+
+        mask = (sdf_values <= 0).detach().cpu().numpy().flatten()
+        print(sum(mask))
+        # Update depth values only if the sdf <= 0 and the depth is uninitialized or larger
+        update_mask = np.logical_and(mask, (depth_image[v_grid, u_grid]==0))
+        depth_image[v_grid[update_mask], u_grid[update_mask]] = depths[update_mask]
+
+        depths += step_size
+        
 
     np.save(filename + '.npy', depth_image)
 
