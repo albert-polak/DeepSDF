@@ -24,7 +24,7 @@ class CameraModel:
               [0, 1 / self.focalLength[1], -self.focalAxis[1] / self.focalLength[1]],
               [0, 0, 1]
           ], dtype=np.float64)
-        self.camera_position = np.array([0, 1.0, 0])
+        self.camera_position = np.array([0.0, 0.0, 1.0])
 
     def getPoint(self, u, v, depth):
         point = np.array([u, v, 1])
@@ -480,44 +480,15 @@ def raycast5(decoder, latent_vec, filename):
 
 
 def raycast6(decoder, latent_vec, filename):
-    N = 256
-    voxel_origin = [-1, -1, -1]
-    voxel_size = 2.0 / (N - 1)
 
+    image_width = 640
+    image_height = 480
     overall_index = torch.arange(0, N ** 3, 1, out=torch.LongTensor())
     samples = torch.zeros(N ** 3, 4)
-
-    # transform first 3 columns
-    # to be the x, y, z index
-    samples[:, 2] = overall_index % N
-    samples[:, 1] = (overall_index.long() / N) % N
-    samples[:, 0] = ((overall_index.long() / N) / N) % N
-
-    # transform first 3 columns
-    # to be the x, y, z coordinate
-    samples[:, 0] = (samples[:, 0] * voxel_size) + voxel_origin[2]
-    samples[:, 1] = (samples[:, 1] * voxel_size) + voxel_origin[1]
-    samples[:, 2] = (samples[:, 2] * voxel_size) + voxel_origin[0]
-
-    num_samples = N ** 3
-
-    samples.requires_grad = False
-
-    head = 0
-    max_batch = 307200
-    while head < num_samples:
-        sample_subset = samples[head : min(head + max_batch, num_samples), 0:3].cuda()
-
-        samples[head : min(head + max_batch, num_samples), 3] = (
-            deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
-            .squeeze(1)
-            .detach()
-            .cpu()
-        )
-        head += max_batch
-
-    sdf_values = samples[:, 3]
-    sdf_values = sdf_values.reshape(N, N, N)
+    bounding_box = [-1, 1]
+    voxel_resolution = max(image_width, image_height)
+    # voxel_resolution = 120
+    voxel_size = (bounding_box[1] - bounding_box[0]) / (voxel_resolution - 1)
 
     # Create a depth image with z-values corresponding to sdf values
     depth_image = np.zeros((480, 640))
@@ -525,9 +496,12 @@ def raycast6(decoder, latent_vec, filename):
 
     for u in range(640):
         for v in range(480):
+            print(u, v)
             # Convert pixel coordinates to the range -1:1
-            u_norm = (2 * u / 640) - 1
-            v_norm = (2 * v / 480) - 1
+            u_norm = (u - 640 / 2) * voxel_size 
+            v_norm = (v - 480 / 2) * voxel_size
+            # u_norm = (2 * u / 640) - 1
+            # v_norm = (2 * v / 480) - 1
 
             # Get the ray direction in camera coordinates
             ray_direction = camera_model.getPoint(u_norm, v_norm, 1.0)
@@ -539,11 +513,14 @@ def raycast6(decoder, latent_vec, filename):
             max_depth = -2.0  # Adjust the maximum depth as needed
 
             while depth >= max_depth:
-                point3D = camera_model.getPoint(u_norm, v_norm, depth)
+                point3D = camera_model.getPoint(u, v, depth)
+                point3D[0] = (point3D[0] - 640 / 2) * voxel_size 
+                point3D[1] = (point3D[1] - 480 / 2) * voxel_size
+                # print(point3D)
                 sdf_value = deep_sdf.utils.decode_sdf(
                     decoder, latent_vec, torch.from_numpy(point3D.reshape(1, 3)).cuda().float()
                 )
-
+                # print(point3D)
                 if sdf_value <= 0:
                     depth_image[v, u] = depth
                     break
