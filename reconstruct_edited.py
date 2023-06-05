@@ -16,16 +16,19 @@ import deep_sdf
 import deep_sdf.workspace as ws
 
 class CameraModel:
-    def __init__(self, focalLengthX, focalLengthY, principalPointX, principalPointY):
+    def __init__(self, fx, fy, cx, cy):
+        self.focalLength = [fx, fy]
+        self.focalAxis = [cx, cy]
         self.PHCPModel = np.array([
-            [1/focalLengthX, 0, -principalPointX/focalLengthX],
-            [0, 1/focalLengthY, -principalPointY/focalLengthY],
+            [1 / fx, 0, -cx / fx],
+            [0, 1 / fy, -cy / fy],
             [0, 0, 1]
-        ])
+        ], dtype=np.float64)
 
-    def projectPoint(self, point3D):
+    def projectPoint(self, point):
+        point3D = np.array([point[0], point[1], 1], dtype=np.float64)
         projectedPoint = np.dot(self.PHCPModel, point3D)
-        return projectedPoint[:2] / projectedPoint[2]
+        return projectedPoint
 
 def pixel_to_world(x, y, z, camera_pos):
     # Convert pixel coordinates to world coordinates
@@ -502,7 +505,7 @@ def raycast6(decoder, latent_vec, filename):
     # Transform pixel coordinates to 3D world coordinates using the camera model
     for i in range(num_pixels):
         u, v = pixel_coords[i]
-        point2D = torch.tensor([u, v, 1])
+        point2D = torch.tensor([u, v])
         point3D = torch.tensor(camera_model.projectPoint(point2D))
         queries[i] = point3D
 
@@ -538,7 +541,17 @@ def raycast6(decoder, latent_vec, filename):
     depth_image = np.zeros((image_height, image_width))
 
     for y, x in positive_coords:
-        depth_image[y][x] = camera_distance - queries[y * image_width + x, 1]
+        query = torch.tensor([[(x - image_width / 2) * voxel_size] * len(z_range),
+                              z_range,
+                              [(y - image_height / 2) * voxel_size] * len(z_range)]).transpose()
+        sample_subset = query.cuda()
+        sdf_values = deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
+        sdf_values = sdf_values.squeeze(1).detach().cpu()
+
+        for i in range(len(sdf_values)):
+            if sdf_values[i] <= 0:
+                if depth_image[y][x] == 0:
+                    depth_image[y][x] = camera_distance - z_range[i]
 
     np.save(filename + '.npy', depth_image)
 
@@ -738,7 +751,7 @@ if __name__ == "__main__":
                     #     decoder, latent, mesh_filename, N=256, max_batch=int(2 ** 18)
                     # )
 
-                    raycast5(decoder, latent, mesh_filename)
+                    raycast6(decoder, latent, mesh_filename)
                     
                 print("total time: {}".format(time.time() - start))
 
