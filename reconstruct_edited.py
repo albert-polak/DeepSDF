@@ -17,6 +17,12 @@ import deep_sdf.workspace as ws
 
 class CameraModel:
     def __init__(self, fx, fy, cx, cy):
+        self.translation = np.array([0, 0, -1])  # Translation vector
+        self.rotation = np.array([
+                            [1, 0, 0],
+                            [0, 0, -1],
+                            [0, 1, 0]
+                        ])  # Rotation matrix
         self.focalLength = [fx, fy]
         self.focalAxis = [cx, cy]
         self.PHCPModel = np.array([
@@ -29,6 +35,9 @@ class CameraModel:
         point = np.column_stack((u, v, np.ones_like(u)))  # Stack u, v, 1 columns horizontally
         depth = depth.reshape(-1, 1)  # Reshape depth to match the shape of point
         point3D = depth * np.dot(self.PHCPModel, point.T).T  # Perform dot product and transpose back
+
+        point3D = np.dot(self.rotation, point3D.T).T + self.translation
+
         return point3D
 
 def pixel_to_world(x, y, z, camera_pos):
