@@ -510,23 +510,45 @@ def raycast6(decoder, latent_vec, filename):
     v_norm_batch = (v_grid * voxel_size).flatten()
 
     depths = np.zeros(len(u_norm_batch))
-    step_size = 0.01  # Adjust the step size as needed
-    max_depth = 1.0  # Adjust the maximum depth as needed
+    step_size = 0.1  # Adjust the step size as needed
+    max_depth = 2.0  # Adjust the maximum depth as needed
     
+    prev_sdf_values = np.zeros_like(depths)
+
+    first_iteration = True
+
+    tolerance = 1e-6  # Tolerance value for the comparison
+
     while np.any(depths <= max_depth):
         point3D_batch = camera_model.getPoint(u_grid, v_grid, depths.reshape(-1))
 
         point3D_batch = point3D_batch[:, [0,2,1]]
         sdf_values = deep_sdf.utils.decode_sdf(
             decoder, latent_vec, torch.from_numpy(point3D_batch).cuda().float()
-        )
+        ).detach().cpu().numpy().flatten()
         # print(point3D_batch)
-        mask = (sdf_values <= 0).detach().cpu().numpy().flatten()
+        mask = (sdf_values <= 0)
         update_mask = np.logical_and(mask, (depth_image[v_grid, u_grid] == 0))
         # print(sum(update_mask))
         depth_image[v_grid[update_mask], u_grid[update_mask]] = depths[update_mask]
 
+        # Check if any of the SDF values are close to zero
+        if np.any(np.isclose(sdf_values, 0.0, atol=0.01)):
+            step_size = 0.01  # Set a smaller step size
+        else:
+            step_size = 0.1  # Set a larger step size
+        print(step_size)
+
+        
+        # Check if any positive SDF values are smaller than the previous iteration with tolerance
+        positive_mask = sdf_values > 0
+        if not first_iteration and not np.any(positive_mask & (sdf_values < prev_sdf_values - tolerance)):
+            print('broken')
+            break
+
+        prev_sdf_values = sdf_values
         depths += step_size
+        first_iteration = False
 
     np.save(filename + '.npy', depth_image)
 
