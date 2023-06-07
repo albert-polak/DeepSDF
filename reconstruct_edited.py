@@ -520,10 +520,10 @@ def raycast6(decoder, latent_vec, filename):
         sdf_values = deep_sdf.utils.decode_sdf(
             decoder, latent_vec, torch.from_numpy(point3D_batch).cuda().float()
         )
-        print(point3D_batch)
+        # print(point3D_batch)
         mask = (sdf_values <= 0).detach().cpu().numpy().flatten()
         update_mask = np.logical_and(mask, (depth_image[v_grid, u_grid] == 0))
-        print(sum(update_mask))
+        # print(sum(update_mask))
         depth_image[v_grid[update_mask], u_grid[update_mask]] = depths[update_mask]
 
         depths += step_size
