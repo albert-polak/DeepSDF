@@ -510,9 +510,9 @@ def raycast6(decoder, latent_vec, filename):
     v_norm_batch = (v_grid * voxel_size).flatten()
 
     depths = np.zeros(len(u_norm_batch))
-    step_size = 0.1  # Adjust the step size as needed
-    max_depth = 2.0  # Adjust the maximum depth as needed
-
+    step_size = 0.01  # Adjust the step size as needed
+    max_depth = 1.0  # Adjust the maximum depth as needed
+    
     while np.any(depths <= max_depth):
         point3D_batch = camera_model.getPoint(u_grid, v_grid, depths.reshape(-1))
 
