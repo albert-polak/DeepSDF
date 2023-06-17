@@ -518,7 +518,7 @@ def raycast6(decoder, latent_vec, filename):
 
     first_iteration = True
 
-    tolerance = 1e-6  # Tolerance value for the comparison
+    tolerance = 1e-4  # Tolerance value for the comparison
 
     while np.any(depths <= max_depth):
         point3D_batch = camera_model.getPoint(u_grid, v_grid, depths.reshape(-1))
