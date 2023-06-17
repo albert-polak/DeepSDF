@@ -11,7 +11,7 @@ import torch
 import deep_sdf.utils
 
 
-def create_mesh_org(
+def create_mesh(
     decoder, latent_vec, filename, N=256, max_batch=32 ** 3, offset=None, scale=None
 ):
     start = time.time()
@@ -71,7 +71,7 @@ def create_mesh_org(
         scale,
     )
 
-def create_mesh(
+def create_mesh_ed(
     decoder, latent_vec, filename, N=256, max_batch=32 ** 3, offset=None, scale=[1, 1, 1]
 ):
     start = time.time()
