@@ -607,6 +607,8 @@ if __name__ == "__main__":
 
     deep_sdf.configure_logging(args)
 
+    reconstruction_times = []
+
     def empirical_stat(latent_vecs, indices):
         lat_mat = torch.zeros(0).cuda()
         for ind in indices:
@@ -752,12 +754,15 @@ if __name__ == "__main__":
                     raycast6(decoder, latent, mesh_filename)
                     
                 print("total time: {}".format(time.time() - start))
+                reconstruction_times.append((npz, time.time() - start))
 
             if not os.path.exists(os.path.dirname(latent_filename)):
                 os.makedirs(os.path.dirname(latent_filename))
 
             torch.save(latent.unsqueeze(0), latent_filename)
 
-
-
-    
+    csv_filename = "reconstruction_times_ray.csv"
+    with open(csv_filename, mode='w') as file:
+        writer = csv.writer(file)
+        writer.writerow(["File Name", "Total Time"])
+        writer.writerows(reconstruction_times)

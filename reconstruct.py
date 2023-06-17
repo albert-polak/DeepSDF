@@ -140,6 +140,8 @@ if __name__ == "__main__":
 
     args = arg_parser.parse_args()
 
+    reconstruction_times = []
+
     deep_sdf.configure_logging(args)
 
     def empirical_stat(latent_vecs, indices):
@@ -283,9 +285,17 @@ if __name__ == "__main__":
                     deep_sdf.mesh.create_mesh(
                         decoder, latent, mesh_filename, N=256, max_batch=int(2 ** 18)
                     )
-                logging.debug("total time: {}".format(time.time() - start))
+                print("total time: {}".format(time.time() - start))
+                reconstruction_times.append((npz, time.time() - start))
+                
 
             if not os.path.exists(os.path.dirname(latent_filename)):
                 os.makedirs(os.path.dirname(latent_filename))
 
             torch.save(latent.unsqueeze(0), latent_filename)
+    
+    csv_filename = "reconstruction_times_org.csv"
+    with open(csv_filename, mode='w') as file:
+        writer = csv.writer(file)
+        writer.writerow(["File Name", "Total Time"])
+        writer.writerows(reconstruction_times)
