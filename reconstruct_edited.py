@@ -533,8 +533,11 @@ def raycast6(decoder, latent_vec, filename):
         # print(sum(update_mask))
         depth_image[v_grid[update_mask], u_grid[update_mask]] = depths[update_mask]
 
+        # Changed mask
+        changed_mask = sdf_values < prev_sdf_values - tolerance
+
         # Check if any of the SDF values are close to zero
-        if np.any(np.isclose(sdf_values, 0.0, atol=0.01)):
+        if np.any(np.isclose(sdf_values[changed_mask], 0.0, atol=0.01)):
             step_size = 0.01  # Set a smaller step size
         else:
             step_size = 0.1  # Set a larger step size
@@ -543,7 +546,7 @@ def raycast6(decoder, latent_vec, filename):
         
         # Check if any positive SDF values are smaller than the previous iteration with tolerance
         positive_mask = sdf_values > 0
-        if not first_iteration and not np.any(positive_mask & (sdf_values < prev_sdf_values - tolerance)):
+        if not first_iteration and not np.any(positive_mask & changed_mask):
             print('broken')
             break
 
