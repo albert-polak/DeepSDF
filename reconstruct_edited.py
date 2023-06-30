@@ -519,6 +519,8 @@ def raycast6(decoder, latent_vec, filename):
     first_iteration = True
 
     tolerance = 1e-4  # Tolerance value for the comparison
+    
+    permanent_mask = None
 
     while np.any(depths <= max_depth):
         point3D_batch = camera_model.getPoint(u_grid, v_grid, depths.reshape(-1))
@@ -529,6 +531,12 @@ def raycast6(decoder, latent_vec, filename):
         ).detach().cpu().numpy().flatten()
         # print(point3D_batch)
         mask = (sdf_values <= 0)
+
+        if first_iteration:
+            permanent_mask = mask
+
+        permanent_mask = np.logical_or(mask, permanent_mask)
+
         update_mask = np.logical_and(mask, (depth_image[v_grid, u_grid] == 0))
         # print(sum(update_mask))
         depth_image[v_grid[update_mask], u_grid[update_mask]] = depths[update_mask]
@@ -546,7 +554,7 @@ def raycast6(decoder, latent_vec, filename):
         
         # Check if any positive SDF values are smaller than the previous iteration with tolerance
         positive_mask = sdf_values > 0
-        if not first_iteration and not np.any(positive_mask & changed_mask):
+        if not first_iteration and not np.any(positive_mask & changed_mask and not permanent_mask):
             print('broken')
             break
 
