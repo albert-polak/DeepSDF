@@ -554,7 +554,7 @@ def raycast6(decoder, latent_vec, filename):
         
         # Check if any positive SDF values are smaller than the previous iteration with tolerance
         positive_mask = sdf_values > 0
-        if not first_iteration and not np.any(positive_mask & changed_mask and not permanent_mask):
+        if not first_iteration and not np.any(positive_mask & changed_mask & ~permanent_mask):
             print('broken')
             break
 
