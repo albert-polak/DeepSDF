@@ -523,6 +523,10 @@ def raycast6(decoder, latent_vec, filename):
     permanent_mask = None
 
     while np.any(depths <= max_depth):
+        if depths[0]<3.9:
+          depths+=step_size
+          continue
+        
         point3D_batch = camera_model.getPoint(u_grid, v_grid, depths.reshape(-1))
 
         point3D_batch = point3D_batch[:, [0,2,1]]
